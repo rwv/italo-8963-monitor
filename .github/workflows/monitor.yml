@@ -1,0 +1,60 @@
+name: Monitor Italo Train
+
+on:
+  workflow_dispatch:
+    inputs:
+      train_number:
+        description: "Train number"
+        default: "8963"
+        required: true
+      station_code:
+        description: "Station code (SMN = Firenze S.M.N.)"
+        default: "SMN"
+        required: true
+      ntfy_topic:
+        description: "ntfy.sh topic"
+        default: "italo-8963-monitor"
+        required: true
+      poll_interval:
+        description: "Seconds between checks"
+        default: "30"
+        required: true
+      max_minutes:
+        description: "Stop after N minutes"
+        default: "120"
+        required: true
+      always_notify:
+        description: "Notify on every poll (not just on change)"
+        type: boolean
+        default: true
+      stop_on_departure:
+        description: "Stop once the train departs your station"
+        type: boolean
+        default: true
+
+# A train number running at most once at a time; cancel an older run if re-triggered.
+concurrency:
+  group: italo-monitor-${{ github.event.inputs.train_number }}
+  cancel-in-progress: true
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(github.event.inputs.max_minutes) + 5 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Run monitor
+        env:
+          TRAIN_NUMBER: ${{ github.event.inputs.train_number }}
+          STATION_CODE: ${{ github.event.inputs.station_code }}
+          NTFY_TOPIC: ${{ github.event.inputs.ntfy_topic }}
+          POLL_INTERVAL: ${{ github.event.inputs.poll_interval }}
+          MAX_MINUTES: ${{ github.event.inputs.max_minutes }}
+          ALWAYS_NOTIFY: ${{ github.event.inputs.always_notify == 'true' && '1' || '0' }}
+          STOP_ON_DEPARTURE: ${{ github.event.inputs.stop_on_departure == 'true' && '1' || '0' }}
+        run: |
+          export STOP_AFTER_SECONDS=$(( MAX_MINUTES * 60 ))
+          python3 monitor.py
